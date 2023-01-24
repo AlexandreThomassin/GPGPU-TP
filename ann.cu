@@ -12,10 +12,6 @@ double normalRand(double mu, double sigma);
 void init_weight(matrix_t* w, unsigned nneurones_prev);
 void print_layer(layer_t *layer);
 
-// const int N = 1024 * 1024;
-// const int threadsPerBlock = 256;
-// const int blocksPerGrid = (N+threadsPerBlock-1) / threadsPerBlock ;
-
 double normalRand(double mu, double sigma)
 {
 	const double epsilon = DBL_MIN;
@@ -52,37 +48,6 @@ void init_weight(matrix_t* w, unsigned nneurones_prev)
     cudaMemcpy(w->m, m, w->rows * w->columns * sizeof(double), cudaMemcpyHostToDevice);
 }
 
-ann_t * create_ann_kernel(double alpha, unsigned minibatch_size, unsigned number_of_layers, unsigned* nneurons_per_layer)
-{
-    ann_t *nn;
-
-    cudaMalloc((void **) &nn, sizeof(ann_t));
-
-    layer_t **layers = (layer_t **)malloc(number_of_layers * sizeof(layer_t*));
-
-    cudaMemcpy(&(nn->number_of_layers), &number_of_layers, sizeof(unsigned), cudaMemcpyHostToDevice);
-    cudaMemcpy(&(nn->alpha), &alpha, sizeof(double), cudaMemcpyHostToDevice);
-    cudaMemcpy(&(nn->minibatch_size), &minibatch_size, sizeof(unsigned), cudaMemcpyHostToDevice);
-
-    layer_t *layer0 = create_layer_kernel(0, nneurons_per_layer[0], minibatch_size, minibatch_size);
-    layers[0] = layer0;
-
-    for (int l = 1; l < number_of_layers; l++)
-    {
-        layer_t *layerl = create_layer_kernel(l, nneurons_per_layer[l], nneurons_per_layer[l-1], minibatch_size);
-        layers[l] = layerl;
-    }
-
-    
-    layer_t **d_layers;
-    cudaMalloc((void **) &d_layers, number_of_layers * sizeof(layer_t*));
-    cudaMemcpy(d_layers, layers, number_of_layers * sizeof(layer_t), cudaMemcpyHostToDevice);
-
-    cudaMemcpy(&(nn->layers), &d_layers, sizeof(layer_t**), cudaMemcpyHostToDevice);
-
-    return nn;
-}
-
 ann_t * create_ann(double alpha, unsigned minibatch_size, unsigned number_of_layers, unsigned* nneurons_per_layer)
 {
     ann_t * nn = (ann_t *)malloc(sizeof(ann_t));
@@ -99,36 +64,6 @@ ann_t * create_ann(double alpha, unsigned minibatch_size, unsigned number_of_lay
     }
 
     return nn;
-}
-
-layer_t * create_layer_kernel(unsigned layer_number, unsigned number_of_neurons, unsigned nneurons_previous_layer, unsigned minibatch_size)
-{
-    layer_t *layer;
-    cudaMalloc((void **) &layer, sizeof(layer_t));
-
-    cudaMemcpy(&(layer->number_of_neurons), &number_of_neurons, sizeof(unsigned), cudaMemcpyHostToDevice);
-    cudaMemcpy(&(layer->minibatch_size), &minibatch_size, sizeof(unsigned), cudaMemcpyHostToDevice);
-    
-    matrix_t *activations = alloc_matrix_kernel(number_of_neurons, minibatch_size);
-    matrix_t *z = alloc_matrix_kernel(number_of_neurons, minibatch_size);
-    matrix_t *delta = alloc_matrix_kernel(number_of_neurons, minibatch_size);
-    matrix_t *weights = alloc_matrix_kernel(number_of_neurons, nneurons_previous_layer);    
-    matrix_t *biases = alloc_matrix_kernel(number_of_neurons, 1);
-
-    cudaMemcpy(&(layer->activations), &activations, sizeof(matrix_t*), cudaMemcpyHostToDevice);
-    cudaMemcpy(&(layer->z), &z, sizeof(matrix_t*), cudaMemcpyHostToDevice);
-    cudaMemcpy(&(layer->delta), &delta, sizeof(matrix_t*), cudaMemcpyHostToDevice);
-    cudaMemcpy(&(layer->biases), &biases, sizeof(matrix_t*), cudaMemcpyHostToDevice);
-
-    if (layer_number > 0)
-    {
-        matrix_t *w = (matrix_t*)malloc(sizeof(matrix_t));
-        init_weight(w, nneurons_previous_layer);
-        cudaMemcpy(weights, w, sizeof(matrix_t), cudaMemcpyHostToDevice);
-    }
-
-    cudaMemcpy(&(layer->weights), &weights, sizeof(matrix_t*), cudaMemcpyHostToDevice);
-    return layer;
 }
 
 layer_t * create_layer(unsigned layer_number, unsigned number_of_neurons, unsigned nneurons_previous_layer, unsigned minibatch_size)
@@ -149,10 +84,6 @@ layer_t * create_layer(unsigned layer_number, unsigned number_of_neurons, unsign
     }
 
     return layer;
-}
-
-void set_input(ann_t *nn, matrix_t* input){
-    matrix_memcpy(nn->layers[0]->activations, input);
 }
 
 void print_layer(layer_t *layer)
@@ -193,11 +124,6 @@ void forward(ann_t *nn)
         matrix_t *z2 = alloc_matrix_kernel(nn->layers[l]->number_of_neurons, nn->minibatch_size);
         matrix_t *one = alloc_matrix_kernel(1, nn->minibatch_size);
 
-        // double *m = (double*) malloc(one->columns * one->rows * sizeof(double));
-        // for (int idx = 0; idx < one->columns*one->rows; idx++)
-        //     m[idx] = 1.0;
-
-        // cudaMemcpy(one->m, m, one->rows * one->columns * sizeof(double), cudaMemcpyHostToDevice);
         cudaMemset(one->m, 1, one->rows * one->columns * sizeof(double));
         
         dim3 blockDim(16, 16);
@@ -284,13 +210,7 @@ void backward(ann_t *nn, matrix_t *y)
         matrix_t *one, *b1;
         b1 = alloc_matrix_kernel(nn->layers[l]->number_of_neurons, 1);
         one = alloc_matrix_kernel(nn->minibatch_size, 1);
-        // double *m = (double*)malloc(one->columns * one->rows * sizeof(double));
-        // for (int idx = 0; idx < one->columns*one->rows; idx++)
-        //     m[idx] = 1.0;
 
-        // cudaMemcpy(one->m, m, one->rows * one->columns * sizeof(double), cudaMemcpyHostToDevice);
-
-        // free(m);
         cudaMemset(one->m, 1, one->rows * one->columns * sizeof(double));
 
 
@@ -299,30 +219,7 @@ void backward(ann_t *nn, matrix_t *y)
         matrix_scalar_kernel<<<gridDim7, blockDim>>>(b1->m,  nn->alpha / nn->minibatch_size, b1->m, b1->rows, b1->columns); // b1 <- alpha / m . delta^l x 1^T
         matrix_minus_kernel<<<gridDim7, blockDim>>>(nn->layers[l]->biases->m, b1->m, nn->layers[l]->biases->m, b1->rows, b1->columns); // b^l = b^l - alpha / m . delta^l x 1^T
         
-        // destroy_matrix_kernel(one);
-        // destroy_matrix_kernel(b1);
-    }
-}
-
-void forward_CPU(ann_t *nn, double (*activation_function)(double))
-{
-
-    for (int l = 1; l < nn->number_of_layers; l++)
-    {
-        matrix_t *z1 = alloc_matrix(nn->layers[l]->number_of_neurons, nn->minibatch_size);
-        matrix_t *z2 = alloc_matrix(nn->layers[l]->number_of_neurons, nn->minibatch_size);
-        matrix_t *one = alloc_matrix(1, nn->minibatch_size);
-        for (int idx = 0; idx < one->columns*one->rows; idx++)
-            one->m[idx] = 1.0;
-
-        matrix_dot(nn->layers[l]->weights, nn->layers[l-1]->activations, z1); // z1 <- w^l x a^(l-1)
-        matrix_dot(nn->layers[l]->biases, one, z2); // z2 <- b^l x 1        
-        matrix_sum(z1, z2, nn->layers[l]->z); // z^l <- z1 + z2 <=> z^l <- w^l x a^(l-1) + b^l x 1      
-
-        matrix_function(nn->layers[l]->z, activation_function, nn->layers[l]->activations); // a^l = f(z^l)
-     
-        destroy_matrix_kernel(z1);
-        destroy_matrix_kernel(z2);
         destroy_matrix_kernel(one);
+        destroy_matrix_kernel(b1);
     }
 }

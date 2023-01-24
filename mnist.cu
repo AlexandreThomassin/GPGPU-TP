@@ -32,6 +32,38 @@ byte* read_labels(const char filename[], unsigned* n )
     return ls;
 }
 
+byte* read_labels_kernel(const char filename[], unsigned* n )
+{
+    FILE* data = fopen(filename, "r");
+
+    if (data == NULL)
+    {
+        perror(filename);
+        exit(1);
+    }
+
+    byte buf[4];
+
+    fread(buf, 1, 4, data); // magic number (discarded)
+    fread(buf, 1, 4, data); // number of labels
+    *n = make_uint32(buf);
+
+    byte* ls = (byte*) calloc(*n, sizeof(byte));
+    byte* d_ls;
+    cudaMalloc((void **) &d_ls, (*n)*sizeof(byte));
+
+    // Read n labels
+    fread(ls, 1, *n, data);
+
+    fclose(data);
+
+    cudaMemcpy(d_ls, ls, (*n)*sizeof(byte), cudaMemcpyHostToDevice);
+
+    free(ls);
+
+    return d_ls;
+}
+
 image* read_images(const char filename[], unsigned* n )
 {
     FILE* data = fopen(filename, "r");
@@ -59,6 +91,42 @@ image* read_images(const char filename[], unsigned* n )
     fclose(data);
 
     return is;
+}
+
+
+image* read_images_kernel(const char filename[], unsigned* n )
+{
+    FILE* data = fopen(filename, "r");
+
+    if (data == NULL)
+    {
+        perror(filename);
+        exit(1);
+    }
+
+    byte buf[4];
+
+    fread(buf, 1, 4, data); // magic number (discarded)
+    fread(buf, 1, 4, data); // number of images
+    *n = make_uint32(buf);
+
+    fread(buf, 1, 4, data); // rows (discarded)
+    fread(buf, 1, 4, data); // columns (discarded)
+
+    image* is = (image*) calloc(*n, sizeof(image));
+
+    // Read n images
+    fread(is, 28*28, *n, data);
+
+    fclose(data);
+
+    image* d_is;
+    cudaMalloc((void **) &d_is, (*n)*sizeof(image));
+    cudaMemcpy(d_is, is, (*n)*sizeof(image), cudaMemcpyHostToDevice);
+
+    free(is);
+
+    return d_is;
 }
 
 /*void draw_image(image img)

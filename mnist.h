@@ -17,4 +17,7 @@ byte* read_labels(const char filename[], unsigned* n );
 image* read_images(const char filename[], unsigned* n );
 //void draw_image(image img);
 
+byte* read_labels_kernel(const char filename[], unsigned* n);
+image* read_images_kernel(const char filename[], unsigned* n );
+
 #endif

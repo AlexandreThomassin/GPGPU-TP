@@ -38,14 +38,8 @@ void set_input(ann_t *nn, matrix_t* input);
 
 void print_nn(ann_t *nn);
 
-void forward_CPU(ann_t *nn, double (*activation_function)(double));
-
 void forward(ann_t *nn);
 
 void backward(ann_t *nn, matrix_t *y);
-
-ann_t * create_ann_kernel(double alpha, unsigned minibatch_size, unsigned number_of_layers, unsigned* nneurons_per_layer);
-
-layer_t * create_layer_kernel(unsigned layer_number, unsigned number_of_neurons, unsigned nneurons_previous_layer, unsigned minibatch_size);
 
 #endif
